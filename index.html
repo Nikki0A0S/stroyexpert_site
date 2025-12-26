@@ -321,13 +321,14 @@
           </tbody>
         </table>
       </div>
-
-      <div style="margin-top: 32px; padding: 20px; background: rgba(34, 197, 94, 0.1); border-radius: var(--radius); border: 1px solid var(--success); text-align: center;">
-        <p style="margin-bottom: 16px;">Вы можете скачать сформированный PDF-отчет для печати.</p>
-        <a href="files/report.pdf" download class="btn-primary" style="text-decoration: none; display: inline-block; width: auto; padding: 12px 32px;">
-          📥 Скачать отчет (PDF)
-        </a>
-      </div>
+		
+	  <!-- Внутри <main id="page4"> -->
+	  <div style="margin-top: 32px; padding: 20px; background: rgba(34, 197, 94, 0.1); border-radius: var(--radius); border: 1px solid var(--success); text-align: center;">
+	  	<p style="margin-bottom: 16px;">Вы можете скачать сформированный PDF-отчет.</p>
+	  	<a href="#" id="downloadReportBtn" download class="btn-primary" style="text-decoration: none; display: inline-block; width: auto; padding: 12px 32px;">
+	  	  📥 Скачать отчет (PDF)
+	  	</a>
+	  </div>
 
       <button class="btn-secondary" style="width: 100%; margin-top: 20px;" onclick="showPage(3)">Назад к задаче</button>
     </main>
@@ -468,11 +469,32 @@
     // --- POS Logic ---
     const inputPos = document.getElementById('inputPos');
     inputPos.addEventListener('change', (e) => handlePos(e.target.files[0]));
+// Добавьте в объект state новое поле
+    const state = { 
+      posFile: null, 
+      posUrl: null, 
+      photos: [], 
+      currentNumber: null // Сюда сохраним номер документа
+    };
 
     function handlePos(file) {
       if (!file) return;
       if (file.type !== 'application/pdf') { alert("Ошибка: только PDF."); return; }
       
+      // Логика извлечения номера: берем всё до "-ПОС"
+      // Если файл "40-17-4-ПОС11.pdf", то получим "40-17-4"
+      const fileName = file.name;
+      const match = fileName.match(/^(.*?)-ПОС/i); // Регулярное выражение (игнорирует регистр)
+      
+      if (match && match[1]) {
+        state.currentNumber = match[1];
+        console.log("Определен номер проекта:", state.currentNumber);
+      } else {
+        // Если формат имени другой, можно взять имя целиком без расширения или выдать предупреждение
+        state.currentNumber = fileName.replace(/\.[^/.]+$/, ""); 
+        console.warn("Предупреждение: Формат имени файла не содержит '-ПОС'");
+      }
+
       if (state.posUrl) URL.revokeObjectURL(state.posUrl);
       state.posFile = file;
       state.posUrl = URL.createObjectURL(file);
@@ -627,19 +649,93 @@
         else document.getElementById('inputPhotos').files = files, document.getElementById('inputPhotos').dispatchEvent(new Event('change'));
       };
     });
-
+	  
 	async function loadXmlData() {
       const tbody = document.getElementById('xmlTableBody');
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Загрузка данных...</td></tr>';
+      const downloadBtn = document.getElementById('downloadReportBtn');
+      
+      if (!state.currentNumber) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Ошибка: номер проекта не распознан.</td></tr>';
+          return;
+      }
+
+      // Формируем пути к файлам в папке files/
+      const xmlPath = `files/table_${state.currentNumber}.xml`;
+      const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
+
+      // Настраиваем кнопку скачивания
+      downloadBtn.href = reportPath;
+      downloadBtn.innerHTML = `📥 Скачать Отчет_${state.currentNumber}.pdf`;
+
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Загрузка данных из ' + xmlPath + '...</td></tr>';
 
       try {
-        const response = await fetch('data.xml');
+        const response = await fetch(xmlPath);
+        
+        if (!response.ok) throw new Error('Файл не найден');
+
         const xmlText = await response.text();
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, "text/xml");
         const items = xmlDoc.getElementsByTagName("item");
 
-        tbody.innerHTML = ''; // Очищаем текст загрузки
+        tbody.innerHTML = ''; 
+
+        for (let i = 0; i < items.length; i++) {
+          const name = items[i].getElementsByTagName("name")[0]?.textContent || "—";
+          const req = items[i].getElementsByTagName("requirement")[0]?.textContent || "—";
+          const status = items[i].getElementsByTagName("status")[0]?.textContent || "—";
+
+          const row = `
+            <tr style="border-bottom: 1px solid var(--border);">
+              <td style="padding: 12px; font-weight: 600;">${name}</td>
+              <td style="padding: 12px; color: var(--text-muted); font-size: 14px;">${req}</td>
+              <td style="padding: 12px;">
+                <span class="status-badge ${status === 'Соответствует' ? 'status-done' : 'status-error'}">
+                  ${status}
+                </span>
+              </td>
+            </tr>`;
+          tbody.innerHTML += row;
+        }
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--danger); padding:20px;">
+            Ошибка: Файл <b>${xmlPath}</b> не найден.<br>
+            Убедитесь, что вы загрузили его в папку files в репозитории GitHub.
+        </td></tr>`;
+      }
+    }
+	  
+	async function loadXmlData() {
+      const tbody = document.getElementById('xmlTableBody');
+      const downloadBtn = document.getElementById('downloadReportBtn');
+      
+      if (!state.currentNumber) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Ошибка: номер проекта не распознан.</td></tr>';
+          return;
+      }
+		
+      // Формируем пути к файлам в папке files/
+      const xmlPath = `files/table_${state.currentNumber}.xml`;
+      const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
+
+      // Настраиваем кнопку скачивания
+      downloadBtn.href = reportPath;
+      downloadBtn.innerHTML = `📥 Скачать Отчет_${state.currentNumber}.pdf`;
+
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Загрузка данных...</td></tr>';
+
+      try {
+        const response = await fetch(xmlPath);
+        
+        if (!response.ok) throw new Error('Двнные не найдены');
+
+        const xmlText = await response.text();
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        const items = xmlDoc.getElementsByTagName("item");
+
+        tbody.innerHTML = '';  // Очищаем текст загрузки
 
         for (let i = 0; i < items.length; i++) {
           const id = items[i].getElementsByTagName("id")[0].textContent;
@@ -665,3 +761,4 @@
   </script>
 </body>
 </html>
+
