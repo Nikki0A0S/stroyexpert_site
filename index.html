@@ -342,18 +342,8 @@
     function handlePos(file) {
       if (!file || file.type !== 'application/pdf') return;
       
-      // Изменено регулярное выражение: ищем всё до "_ПОС"
-      // Если файл "40-17-4_ПОС.pdf", то match[1] будет "40-17-4"
       const match = file.name.match(/^(.*?)_ПОС/i); 
-      
-      if (match && match[1]) {
-        state.currentNumber = match[1];
-      } else {
-        // Если формат не совпал, берем имя до первой точки (как запасной вариант)
-        state.currentNumber = file.name.split('.')[0];
-      }
-      
-      console.log("Определен номер проекта:", state.currentNumber);
+      state.currentNumber = match ? match[1] : null; // Если не совпало, ставим null для ошибки
       
       if (state.posUrl) URL.revokeObjectURL(state.posUrl);
       state.posFile = file;
@@ -377,7 +367,12 @@
     function handlePhotos(files) {
       Array.from(files).forEach(file => {
         if (state.photos.length < 20) {
-          state.photos.push({ file, url: URL.createObjectURL(file) });
+          // Сохраняем объект: файл, url и имя файла для проверки
+          state.photos.push({ 
+            file: file, 
+            url: URL.createObjectURL(file),
+            name: file.name 
+          });
         }
       });
       renderPhotos();
@@ -441,15 +436,70 @@
     function closeElement(id) { document.getElementById(id).style.display = 'none'; }
 
     // --- ИМИТАЦИЯ И XML ---
-    function updateTaskStatusSimulation() {
+    async function updateTaskStatusSimulation() {
       const label = document.getElementById('taskStatusLabel');
-      label.textContent = 'завершено';
-      label.className = 'status-badge status-done';
-      document.getElementById('statusExplanation').innerHTML = `
-        Анализ успешно завершен. Все контрольные точки сопоставлены.
-        <br><br>
-        <button class="btn-primary" onclick="showPage(4)">Посмотреть результаты</button>
-      `;
+      const desc = document.getElementById('statusExplanation');
+      
+      label.textContent = 'проверка данных...';
+      label.className = 'status-badge status-process';
+
+      let errors = [];
+
+      // 1. Проверка номера ПОС
+      if (!state.currentNumber) {
+        errors.push("Файл ПОС должен называться по шаблону: <b>номер_ПОС.pdf</b>");
+      }
+
+      // 2. Проверка имен фотографий
+      state.photos.forEach(photo => {
+        const photoMatch = photo.name.match(/^(.*?)_IMG_\d+/i);
+        const photoNumber = photoMatch ? photoMatch[1] : null;
+        
+        if (!photoNumber) {
+          errors.push(`Файл <b>${photo.name}</b> не соответствует шаблону номер_IMG_1.jpg`);
+        } else if (photoNumber !== state.currentNumber) {
+          errors.push(`Номер в фото <b>${photoNumber}</b> не совпадает с номером ПОС <b>${state.currentNumber}</b>`);
+        }
+      });
+
+      // 3. Проверка наличия файлов на сервере (XML и PDF отчет)
+      if (state.currentNumber && errors.length === 0) {
+        const xmlPath = `files/table_${state.currentNumber}.xml`;
+        const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
+
+        try {
+          const [xmlResp, pdfResp] = await Promise.all([
+            fetch(xmlPath, { method: 'HEAD' }),
+            fetch(reportPath, { method: 'HEAD' })
+          ]);
+
+          if (!xmlResp.ok) errors.push(`В папке files не найден файл данных: <b>table_${state.currentNumber}.xml</b>`);
+          if (!pdfResp.ok) errors.push(`В папке files не найден отчет: <b>Отчет_${state.currentNumber}.pdf</b>`);
+        } catch (e) {
+          errors.push("Ошибка связи с сервером при проверке файлов.");
+        }
+      }
+
+      // ВЫВОД РЕЗУЛЬТАТА
+      if (errors.length > 0) {
+        label.textContent = 'ошибка';
+        label.className = 'status-badge status-error';
+        // Выводим все ошибки списком
+        desc.innerHTML = `<div style="text-align:left; color:var(--danger); font-style:normal;">
+          <b>Обнаружены несоответствия:</b><br>
+          <ul style="margin-top:10px; padding-left:20px;">
+            ${errors.map(err => `<li>${err}</li>`).join('')}
+          </ul>
+        </div>`;
+      } else {
+        label.textContent = 'завершено';
+        label.className = 'status-badge status-done';
+        desc.innerHTML = `
+          Анализ успешно завершен. Все данные синхронизированы.
+          <br><br>
+          <button class="btn-primary" onclick="showPage(4)">Посмотреть результаты</button>
+        `;
+      }
     }
 
     async function loadXmlData() {
@@ -521,5 +571,6 @@
   </script>
 </body>
 </html>
+
 
 
