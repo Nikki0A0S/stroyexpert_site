@@ -342,8 +342,8 @@
     function handlePos(file) {
       if (!file || file.type !== 'application/pdf') return;
       
-      const match = file.name.match(/^(.*?)_ПОС/i); 
-      state.currentNumber = match ? match[1] : null; // Если не совпало, ставим null для ошибки
+      const match = file.name.match(/^(.*?)_ПОС/i);
+      state.currentNumber = match ? match[1] : null; // Сохраняем номер или null
       
       if (state.posUrl) URL.revokeObjectURL(state.posUrl);
       state.posFile = file;
@@ -440,62 +440,58 @@
       const label = document.getElementById('taskStatusLabel');
       const desc = document.getElementById('statusExplanation');
       
-      label.textContent = 'проверка данных...';
+      label.textContent = 'в процессе';
       label.className = 'status-badge status-process';
+      desc.textContent = 'Идет обработка данных...';
 
-      let errors = [];
+      let isError = false;
 
-      // 1. Проверка номера ПОС
+      // 1. Проверка номера ПОС (должен быть номер_ПОС)
       if (!state.currentNumber) {
-        errors.push("Файл ПОС должен называться по шаблону: <b>номер_ПОС.pdf</b>");
+        isError = true;
       }
 
-      // 2. Проверка имен фотографий
-      state.photos.forEach(photo => {
-        const photoMatch = photo.name.match(/^(.*?)_IMG_\d+/i);
-        const photoNumber = photoMatch ? photoMatch[1] : null;
-        
-        if (!photoNumber) {
-          errors.push(`Файл <b>${photo.name}</b> не соответствует шаблону номер_IMG_1.jpg`);
-        } else if (photoNumber !== state.currentNumber) {
-          errors.push(`Номер в фото <b>${photoNumber}</b> не совпадает с номером ПОС <b>${state.currentNumber}</b>`);
+      // 2. Проверка имен фотографий (номер_IMG_1.jpg и совпадение с ПОС)
+      if (!isError) {
+        for (let p of state.photos) {
+          const photoMatch = p.file.name.match(/^(.*?)_IMG_\d+/i);
+          const photoNum = photoMatch ? photoMatch[1] : null;
+          if (!photoNum || photoNum !== state.currentNumber) {
+            isError = true;
+            break;
+          }
         }
-      });
+      }
 
-      // 3. Проверка наличия файлов на сервере (XML и PDF отчет)
-      if (state.currentNumber && errors.length === 0) {
-        const xmlPath = `files/table_${state.currentNumber}.xml`;
-        const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
-
+      // 3. Проверка наличия файлов в папке files на сервере
+      if (!isError && state.currentNumber) {
         try {
+          const xmlPath = `files/table_${state.currentNumber}.xml`;
+          const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
+
           const [xmlResp, pdfResp] = await Promise.all([
             fetch(xmlPath, { method: 'HEAD' }),
             fetch(reportPath, { method: 'HEAD' })
           ]);
 
-          if (!xmlResp.ok) errors.push(`В папке files не найден файл данных: <b>table_${state.currentNumber}.xml</b>`);
-          if (!pdfResp.ok) errors.push(`В папке files не найден отчет: <b>Отчет_${state.currentNumber}.pdf</b>`);
+          if (!xmlResp.ok || !pdfResp.ok) {
+            isError = true;
+          }
         } catch (e) {
-          errors.push("Ошибка связи с сервером при проверке файлов.");
+          isError = true;
         }
       }
 
-      // ВЫВОД РЕЗУЛЬТАТА
-      if (errors.length > 0) {
+      // Итог проверки
+      if (isError) {
         label.textContent = 'ошибка';
         label.className = 'status-badge status-error';
-        // Выводим все ошибки списком
-        desc.innerHTML = `<div style="text-align:left; color:var(--danger); font-style:normal;">
-          <b>Обнаружены несоответствия:</b><br>
-          <ul style="margin-top:10px; padding-left:20px;">
-            ${errors.map(err => `<li>${err}</li>`).join('')}
-          </ul>
-        </div>`;
+        desc.textContent = 'Произошла ошибка при выполнении анализа. Попробуйте перезапустить задачу.';
       } else {
         label.textContent = 'завершено';
         label.className = 'status-badge status-done';
         desc.innerHTML = `
-          Анализ успешно завершен. Все данные синхронизированы.
+          Анализ успешно завершен. Все контрольные точки сопоставлены.
           <br><br>
           <button class="btn-primary" onclick="showPage(4)">Посмотреть результаты</button>
         `;
@@ -571,6 +567,7 @@
   </script>
 </body>
 </html>
+
 
 
 
