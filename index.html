@@ -206,7 +206,7 @@
           <button onclick="closeElement('posViewer')" style="background:none; border:none; color:#fff; cursor:pointer;">✕</button>
         </div>
         <div class="viewer-content">
-          <iframe id="posIframe"></iframe>
+          <iframe id="posIframe" style="width: 100%; height: 60vh; border: none;"></iframe>
         </div>
       </div>
 
@@ -251,14 +251,24 @@
         <span>Мониторинг задачи</span>
       </div>
       <div class="task-card">
-        <div class="task-info-row"><span>ID:</span> <span id="taskIdDisplay" style="font-family:monospace"></span></div>
-        <div class="task-info-row"><span>Статус:</span> <span id="taskStatusLabel" class="status-badge status-process">в процессе</span></div>
+        <div class="task-info-row">
+          <span class="task-info-label"><b>Задача анализа</b></span>
+        </div>
+        <div class="task-info-row">
+          <span class="task-info-label">Номер (ID):</span>
+          <span id="taskIdDisplay" style="font-family: monospace; font-size: 12px;"></span>
+        </div>
+        <div class="task-info-row">
+          <span class="task-info-label">Статус:</span>
+          <span id="taskStatusLabel" class="status-badge status-process">в процессе</span>
+        </div>
         <div id="statusExplanation" class="status-explanation">Идет обработка данных...</div>
         <div class="btn-group" style="margin-top: 20px;">
           <button class="btn-primary" onclick="updateTaskStatusSimulation()">Обновить статус</button>
-          <button class="btn-secondary" style="color:var(--danger)" onclick="showPage(1)">Удалить</button>
+          <button class="btn-secondary" style="color:var(--danger)" onclick="showPage(1)">Удалить задачу</button>
         </div>
       </div>
+      <button class="btn-secondary" style="width: 100%; margin-top: 10px;" onclick="showPage(2)">Назад</button>
     </main>
 
     <!-- СТРАНИЦА 4 -->
@@ -273,13 +283,14 @@
         </table>
       </div>
       <div style="margin-top: 32px; padding: 20px; background: rgba(34, 197, 94, 0.1); border-radius: var(--radius); border: 1px solid var(--success); text-align: center;">
-        <a href="#" id="downloadReportBtn" download class="btn-primary">📥 Скачать отчет (PDF)</a>
+        <p style="margin-bottom: 16px;">Вы можете скачать сформированный PDF-отчет.</p>
+        <a href="#" id="downloadReportBtn" download class="btn-primary" style="text-decoration: none; display: inline-block; width: auto; padding: 12px 32px;">📥 Скачать отчет (PDF)</a>
       </div>
-      <button class="btn-secondary" style="width: 100%; margin-top: 20px;" onclick="showPage(3)">Назад</button>
+      <button class="btn-secondary" style="width: 100%; margin-top: 20px;" onclick="showPage(3)">Назад к задаче</button>
     </main>
   </div>
 
-  <!-- PDF Fullscreen -->
+  <!-- PDF Fullscreen (Мобильный) -->
   <div id="pdfFullscreenViewer">
     <div class="viewer-header">
       <span style="color:white">Просмотр</span>
@@ -302,18 +313,26 @@
 
     const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-    function formatBytes(bytes) {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024, i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + ['Bytes', 'KB', 'MB', 'GB'][i];
+    // Функция для генерации случайного ID формата UUID
+    function generateRandomId() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
     }
 
     // --- НАВИГАЦИЯ ---
     function showPage(num) {
       document.querySelectorAll('main').forEach(m => m.classList.add('hidden'));
       document.getElementById('page' + num).classList.remove('hidden');
-      if (num === 3) document.getElementById('taskIdDisplay').textContent = Math.random().toString(36).substr(2, 9);
-      if (num === 4) loadXmlData();
+      
+      // Генерируем новый UUID при каждом входе на страницу 3
+      if (num === 3) {
+        document.getElementById('taskIdDisplay').textContent = generateRandomId();
+      }
+      if (num === 4) {
+        loadXmlData();
+      }
     }
 
     // --- ОБРАБОТКА PDF ---
@@ -334,7 +353,10 @@
       document.getElementById('posFileName').textContent = file.name;
       document.getElementById('posThumbContainer').classList.remove('hidden');
       document.getElementById('btnClearPos').classList.remove('hidden');
-      document.getElementById('posIframe').src = isMobile() ? "" : state.posUrl;
+      
+      if (!isMobile()) {
+        document.getElementById('posIframe').src = state.posUrl;
+      }
       checkReady();
     }
 
@@ -391,16 +413,18 @@
       const container = document.getElementById('pdfCanvasContainer');
       document.getElementById('pdfFullscreenViewer').style.display = 'flex';
       container.innerHTML = 'Загрузка...';
-      const pdf = await pdfjsLib.getDocument(state.posUrl).promise;
-      container.innerHTML = '';
-      for (let n = 1; n <= pdf.numPages; n++) {
-        const page = await pdf.getPage(n);
-        const canvas = document.createElement('canvas');
-        const viewport = page.getViewport({ scale: 1.2 });
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        container.appendChild(canvas);
-      }
+      try {
+        const pdf = await pdfjsLib.getDocument(state.posUrl).promise;
+        container.innerHTML = '';
+        for (let n = 1; n <= pdf.numPages; n++) {
+          const page = await pdf.getPage(n);
+          const canvas = document.createElement('canvas');
+          const viewport = page.getViewport({ scale: 1.2 });
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          container.appendChild(canvas);
+        }
+      } catch (e) { container.innerHTML = 'Ошибка загрузки PDF'; }
     }
 
     function closePdfFullscreen() { document.getElementById('pdfFullscreenViewer').style.display = 'none'; }
@@ -411,80 +435,51 @@
       const label = document.getElementById('taskStatusLabel');
       label.textContent = 'завершено';
       label.className = 'status-badge status-done';
-      document.getElementById('statusExplanation').innerHTML = '<button class="btn-primary" onclick="showPage(4)">Результаты</button>';
+      document.getElementById('statusExplanation').innerHTML = `
+        Анализ успешно завершен. Все контрольные точки сопоставлены.
+        <br><br>
+        <button class="btn-primary" onclick="showPage(4)">Посмотреть результаты</button>
+      `;
     }
 
     async function loadXmlData() {
       const tbody = document.getElementById('xmlTableBody');
-      const downloadBtn = document.getElementById('downloadReportBtn');
-		
-      // Очищаем номер от случайных пробелов
       const cleanNumber = state.currentNumber ? state.currentNumber.trim() : null;
 
       if (!cleanNumber) {
-		tbody.innerHTML = '<tr><td colspan="5">Ошибка: Номер проекта не определен</td></tr>';
-		return;
+        tbody.innerHTML = '<tr><td colspan="5">Ошибка: Номер проекта не определен</td></tr>';
+        return;
       }
 
       const xmlPath = `files/table_${cleanNumber}.xml`;
-      const reportPath = `files/Отчет_${cleanNumber}.pdf`;
-
-      console.log("Пытаюсь загрузить XML:", xmlPath);
-      downloadBtn.href = reportPath;
+      document.getElementById('downloadReportBtn').href = `files/Отчет_${cleanNumber}.pdf`;
+      document.getElementById('downloadReportBtn').innerHTML = `📥 Скачать Отчет_${cleanNumber}.pdf`;
 
       tbody.innerHTML = '<tr><td colspan="5">Загрузка данных...</td></tr>';
-
       try {
-		const resp = await fetch(xmlPath);
-			
-		// Проверка: нашелся ли файл на сервере
-		if (!resp.ok) {
-				throw new Error(`Файл не найден (Статус ${resp.status}). Путь: ${xmlPath}`);
-		}
+        const resp = await fetch(xmlPath);
+        if (!resp.ok) throw new Error(`Файл не найден`);
+        
+        const text = await resp.text();
+        const xml = new DOMParser().parseFromString(text, "text/xml");
+        const items = xml.getElementsByTagName("item");
+        tbody.innerHTML = '';
+        
+        for (let i = 0; i < items.length; i++) {
+          const getTxt = (tag) => items[i].getElementsByTagName(tag)[0]?.textContent.trim() || "—";
+          const status = getTxt("status");
+          const statusClass = status.toLowerCase() === 'соответствует' ? 'status-done' : 'status-error';
 
-		const text = await resp.text();
-		const parser = new DOMParser();
-		const xml = parser.parseFromString(text, "text/xml");
-		
-		// Проверка на ошибку парсинга XML
-		const parseError = xml.getElementsByTagName("parsererror");
-		if (parseError.length > 0) {
-				throw new Error("Ошибка в структуре XML файла");
-		}
-		
-		const items = xml.getElementsByTagName("item");
-		if (items.length === 0) {
-				tbody.innerHTML = '<tr><td colspan="5">В файле нет записей <item></td></tr>';
-				return;
-		}
-
-		tbody.innerHTML = '';
-		for (let i = 0; i < items.length; i++) {
-		  // Функция для безопасного получения текста из тегов
-		  const getTxt = (tagName) => {
-			const node = items[i].getElementsByTagName(tagName)[0];
-			return node ? node.textContent.trim() : "—";
-		  };
-
-		  const status = getTxt("status");
-		  const statusClass = status.toLowerCase() === 'соответствует' ? 'status-done' : 'status-error';
-
-		  tbody.innerHTML += `<tr>
-			<td>${getTxt("id")}</td>
-			<td style="font-size:13px">${getTxt("name")}</td>
-			<td style="font-size:12px; color:var(--text-muted)">${getTxt("project")}</td>
-			<td style="font-size:12px; color:var(--text-muted)">${getTxt("fact")}</td>
-			<td><span class="status-badge ${statusClass}">${status}</span></td>
-			</tr>`;
-		}
-      } catch(e) {
-			console.error("Детали ошибки:", e);
-			tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger)">
-				${e.message}<br>
-				<small>Проверьте консоль (F12) для подробностей</small>
-			</td></tr>`;
-      }
-	}
+          tbody.innerHTML += `<tr>
+            <td>${getTxt("id")}</td>
+            <td style="font-size:13px">${getTxt("name")}</td>
+            <td style="font-size:12px; color:var(--text-muted)">${getTxt("project")}</td>
+            <td style="font-size:12px; color:var(--text-muted)">${getTxt("fact")}</td>
+            <td><span class="status-badge ${statusClass}">${status}</span></td>
+          </tr>`;
+        }
+      } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger)">Ошибка: Данные ${xmlPath} не найдены.</td></tr>`; }
+    }
 
     // --- DRAG & DROP ---
     ['dropzonePos', 'dropzonePhotos'].forEach(id => {
@@ -500,8 +495,17 @@
     });
 
     document.getElementById('btnClearPos').onclick = () => {
-      state.posFile = null; document.getElementById('posStatus').textContent = "Не загружен";
+      state.posFile = null; 
+      document.getElementById('posStatus').textContent = "ПОС: Не загружен";
       document.getElementById('posThumbContainer').classList.add('hidden');
+      document.getElementById('btnClearPos').classList.add('hidden');
+      checkReady();
+    };
+
+    document.getElementById('btnClearAllPhotos').onclick = () => {
+      state.photos.forEach(p => URL.revokeObjectURL(p.url));
+      state.photos = [];
+      renderPhotos();
       checkReady();
     };
   </script>
