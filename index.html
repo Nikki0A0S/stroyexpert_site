@@ -650,16 +650,16 @@
       };
     });
 	  
-	async function loadXmlData() {
+	// Функция загрузки данных XML
+    async function loadXmlData() {
       const tbody = document.getElementById('xmlTableBody');
       const downloadBtn = document.getElementById('downloadReportBtn');
       
       if (!state.currentNumber) {
-          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Ошибка: номер проекта не распознан.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Ошибка: номер проекта не распознан. Загрузите файл ПОС.</td></tr>';
           return;
       }
-
-      // Формируем пути к файлам в папке files/
+		
       const xmlPath = `files/table_${state.currentNumber}.xml`;
       const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
 
@@ -667,7 +667,7 @@
       downloadBtn.href = reportPath;
       downloadBtn.innerHTML = `📥 Скачать Отчет_${state.currentNumber}.pdf`;
 
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Загрузка данных из ' + xmlPath + '...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Загрузка данных из ' + xmlPath + '...</td></tr>';
 
       try {
         const response = await fetch(xmlPath);
@@ -682,83 +682,38 @@
         tbody.innerHTML = ''; 
 
         for (let i = 0; i < items.length; i++) {
+          // Безопасное извлечение данных из XML
+          const id = items[i].getElementsByTagName("id")[0]?.textContent || (i + 1);
           const name = items[i].getElementsByTagName("name")[0]?.textContent || "—";
-          const req = items[i].getElementsByTagName("requirement")[0]?.textContent || "—";
-          const status = items[i].getElementsByTagName("status")[0]?.textContent || "—";
+          const project = items[i].getElementsByTagName("project")[0]?.textContent || "—";
+          const fact = items[i].getElementsByTagName("fact")[0]?.textContent || "—";
+          const statusText = items[i].getElementsByTagName("status")[0]?.textContent || "—";
+
+          // Определяем класс цвета для статуса
+          const statusClass = statusText.trim().toLowerCase() === 'соответствует' ? 'status-done' : 'status-error';
 
           const row = `
             <tr style="border-bottom: 1px solid var(--border);">
-              <td style="padding: 12px; font-weight: 600;">${name}</td>
-              <td style="padding: 12px; color: var(--text-muted); font-size: 14px;">${req}</td>
+              <td style="padding: 12px; font-weight: 600;">${id}</td>
+              <td style="padding: 12px;">${name}</td>
+              <td style="padding: 12px; color: var(--text-muted); font-size: 13px;">${project}</td>
+              <td style="padding: 12px; color: var(--text-muted); font-size: 13px;">${fact}</td>
               <td style="padding: 12px;">
-                <span class="status-badge ${status === 'Соответствует' ? 'status-done' : 'status-error'}">
-                  ${status}
-                </span>
+                <span class="status-badge ${statusClass}">${statusText}</span>
               </td>
             </tr>`;
           tbody.innerHTML += row;
         }
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--danger); padding:20px;">
-            Ошибка: Файл <b>${xmlPath}</b> не найден.<br>
-            Убедитесь, что вы загрузили его в папку files в репозитории GitHub.
+        console.error(e);
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--danger); padding:20px;">
+          Ошибка: Данные <b>${xmlPath}</b> не найдены.<br>
+          Проверьте наличие файла в папке files.
         </td></tr>`;
-      }
-    }
-	  
-	async function loadXmlData() {
-      const tbody = document.getElementById('xmlTableBody');
-      const downloadBtn = document.getElementById('downloadReportBtn');
-      
-      if (!state.currentNumber) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Ошибка: номер проекта не распознан.</td></tr>';
-          return;
-      }
-		
-      // Формируем пути к файлам в папке files/
-      const xmlPath = `files/table_${state.currentNumber}.xml`;
-      const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
-
-      // Настраиваем кнопку скачивания
-      downloadBtn.href = reportPath;
-      downloadBtn.innerHTML = `📥 Скачать Отчет_${state.currentNumber}.pdf`;
-
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Загрузка данных...</td></tr>';
-
-      try {
-        const response = await fetch(xmlPath);
-        
-        if (!response.ok) throw new Error('Двнные не найдены');
-
-        const xmlText = await response.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-        const items = xmlDoc.getElementsByTagName("item");
-
-        tbody.innerHTML = '';  // Очищаем текст загрузки
-
-        for (let i = 0; i < items.length; i++) {
-          const id = items[i].getElementsByTagName("id")[0].textContent;
-          const name = items[i].getElementsByTagName("name")[0].textContent;
-          const project = items[i].getElementsByTagName("project")[0].textContent;
-          const fact = items[i].getElementsByTagName("fact")[0].textContent;
-          const status = items[i].getElementsByTagName("status")[0].textContent;
-
-          const row = `
-            <tr style="border-bottom: 1px solid var(--border);">
-              <td style="padding: 12px; font-weight: 600;">${id}</td>
-              <td style="padding: 12px; font-weight: 600;">${name}</td>
-              <td style="padding: 12px; color: var(--text-muted); font-size: 14px;">${project}</td>
-              <td style="padding: 12px; color: var(--text-muted); font-size: 14px;">${fact}</td>
-              <td style="padding: 12px; color: var(--text-muted); font-size: 14px;">${status}</td>
-            </tr>`;
-          tbody.innerHTML += row;
-        }
-      } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--danger); padding:20px;">Ошибка загрузки... Повторите запуск анализа.</td></tr>';
       }
     }
   </script>
 </body>
 </html>
+
 
