@@ -353,147 +353,57 @@
   </div>
 
   <script>
+	// 1. Единое состояние приложения (объявляется один раз!)
+    const state = { 
+      posFile: null, 
+      posUrl: null, 
+      photos: [], 
+      currentNumber: null 
+    };
 
-	// Слушаем нажатие кнопки "Назад" в браузере
-	window.addEventListener('popstate', function(event) {
-	  // Если окно PDF открыто — закрываем его
-	  if (document.getElementById('pdfFullscreenViewer').style.display === 'flex') {
-		closePdfFullscreen(true); // true означает, что вызов пришел от кнопки назад
-	  }
-	  // Если открыто фото — закрываем его
-	  if (document.getElementById('photoViewer').style.display === 'block') {
-		closeViewer('photoViewer', true);
-	  }
-	});
-	
-	const state = { posFile: null, posUrl: null, photos: [] };
-	
-	// Функция для генерации случайного ID формата UUID
-	function generateRandomId() {
-	  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-		const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-		return v.toString(16);
-	  });
-	}
-	
     const pdfjsLib = window['pdfjs-dist/build/pdf'];
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
     const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-    // УПРАВЛЕНИЕ СТРАНИЦАМИ (SPA)
-    function showPage(num) {
-      // Прячем все страницы (добавили 4)
-      document.getElementById('page1').classList.add('hidden');
-      document.getElementById('page2').classList.add('hidden');
-      document.getElementById('page3').classList.add('hidden');
-      document.getElementById('page4').classList.add('hidden');
+    // 2. Генерация ID задачи
+    function generateRandomId() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
 
-      // Показываем нужную
+    // 3. Управление страницами
+    function showPage(num) {
+      document.querySelectorAll('main').forEach(m => m.classList.add('hidden'));
       document.getElementById('page' + num).classList.remove('hidden');
 
-      if (num !== 1) {
-        history.pushState({page: num}, ""); 
-      }
-      
-      if (num === 3) {
-        document.getElementById('taskIdDisplay').textContent = generateRandomId();
-      }
-
-      // Если переходим на страницу 4 — загружаем XML
-      if (num === 4) {
-        loadXmlData();
-      }
+      if (num !== 1) history.pushState({page: num}, ""); 
+      if (num === 3) document.getElementById('taskIdDisplay').textContent = generateRandomId();
+      if (num === 4) loadXmlData();
     }
 
-    // Обработка кнопки "Назад" в браузере/телефоне
     window.onpopstate = function(event) {
       if (document.getElementById('pdfFullscreenViewer').style.display === 'flex') {
-        closePdfFullscreen(true);
-        return;
-      }
-      if (document.getElementById('globalViewer').style.display === 'block') {
-        closeGlobalViewer();
-        return;
-      }
-
-      // Навигация по страницам
-      if (!event.state || event.state.page === 1) {
-        showPage(1);
-      } else if (event.state.page === 2) {
-        showPage(2);
+        closePdfFullscreen();
+      } else {
+        const page = (event.state && event.state.page) ? event.state.page : 1;
+        showPage(page);
       }
     };
 
-    // --- Логика страницы 3 (Имитация) ---
-    function updateTaskStatusSimulation() {
-      const label = document.getElementById('taskStatusLabel');
-      const desc = document.getElementById('statusExplanation');
-      
-      // Простое переключение статусов по кругу для демонстрации
-      if (label.classList.contains('status-process')) {
-        label.textContent = 'завершено';
-        label.className = 'status-badge status-done';
-        desc.innerHTML = `
-          Анализ успешно завершен. Все контрольные точки сопоставлены.
-          <br><br>
-          <button class="btn-primary" onclick="showPage(4)">Посмотреть результаты</button>
-        `;
-      } else if (label.classList.contains('status-done')) {
-        label.textContent = 'ошибка';
-        label.className = 'status-badge status-error';
-        desc.textContent = 'Произошла ошибка при выполнении анализа. Попробуйте перезапустить задачу.';
-      } else {
-        label.textContent = 'в процессе';
-        label.className = 'status-badge status-process';
-        desc.textContent = 'Идет обработка данных... Пожалуйста, подождите завершения процесса.';
-      }
-    }
-
-    function deleteTaskSimulation() {
-      if (confirm('Вы уверены, что хотите удалить задачу? Все результаты анализа будут стерты.')) {
-        showPage(1);
-        alert('Задача удалена.');
-      }
-    }
-
-    // --- Логика загрузки (без изменений) ---
-    document.getElementById('btnToStep2').onclick = () => showPage(2);
-
-    function formatBytes(bytes) {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    // --- POS Logic ---
+    // 4. Обработка ПОС (PDF)
     const inputPos = document.getElementById('inputPos');
     inputPos.addEventListener('change', (e) => handlePos(e.target.files[0]));
-// Добавьте в объект state новое поле
-    const state = { 
-      posFile: null, 
-      posUrl: null, 
-      photos: [], 
-      currentNumber: null // Сюда сохраним номер документа
-    };
 
     function handlePos(file) {
       if (!file) return;
       if (file.type !== 'application/pdf') { alert("Ошибка: только PDF."); return; }
       
-      // Логика извлечения номера: берем всё до "-ПОС"
-      // Если файл "40-17-4-ПОС11.pdf", то получим "40-17-4"
       const fileName = file.name;
-      const match = fileName.match(/^(.*?)-ПОС/i); // Регулярное выражение (игнорирует регистр)
-      
-      if (match && match[1]) {
-        state.currentNumber = match[1];
-        console.log("Определен номер проекта:", state.currentNumber);
-      } else {
-        // Если формат имени другой, можно взять имя целиком без расширения или выдать предупреждение
-        state.currentNumber = fileName.replace(/\.[^/.]+$/, ""); 
-        console.warn("Предупреждение: Формат имени файла не содержит '-ПОС'");
-      }
+      const match = fileName.match(/^(.*?)-ПОС/i);
+      state.currentNumber = (match && match[1]) ? match[1] : fileName.replace(/\.[^/.]+$/, "");
 
       if (state.posUrl) URL.revokeObjectURL(state.posUrl);
       state.posFile = file;
@@ -510,74 +420,7 @@
       checkReady();
     }
 
-    // Клик по превью PDF
-    document.getElementById('posPreviewThumb').onclick = () => {
-      if (isMobile()) {
-        openPdfFullscreen();
-      } else {
-        document.getElementById('posViewer').style.display = 'block';
-        document.getElementById('posViewer').scrollIntoView({behavior:'smooth'});
-      }
-    };
-
-    // Рендеринг PDF для мобильных (PDF.js)
-	async function openPdfFullscreen() {
-	  const container = document.getElementById('pdfCanvasContainer');
-	  container.innerHTML = '<p style="color:white; padding: 20px;">Загрузка документа...</p>';
-	  document.getElementById('pdfFullscreenViewer').style.display = 'flex';
-	  
-	  // Добавляем запись в историю, чтобы кнопка "Назад" сработала как закрытие
-	  history.pushState({ viewer: 'pdf' }, '');
-
-	  try {
-		const loadingTask = pdfjsLib.getDocument(state.posUrl);
-		const pdf = await loadingTask.promise;
-		container.innerHTML = ''; 
-
-		for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-		  const page = await pdf.getPage(pageNum);
-		  const viewport = page.getViewport({ scale: 1.5 });
-		  const canvas = document.createElement('canvas');
-		  const context = canvas.getContext('2d');
-		  canvas.height = viewport.height;
-		  canvas.width = viewport.width;
-
-		  await page.render({ canvasContext: context, viewport: viewport }).promise;
-		  container.appendChild(canvas);
-		}
-	  } catch (e) {
-		container.innerHTML = '<p style="color:red; padding: 20px;">Ошибка: ' + e.message + '</p>';
-	  }
-	}
-
-	// Измененная функция закрытия
-	function closePdfFullscreen(isPopState = false) {
-	  document.getElementById('pdfFullscreenViewer').style.display = 'none';
-	  
-	  // Если мы закрыли кнопкой "Закрыть", а не "Назад", 
-	  // нужно убрать виртуальную запись из истории вручную
-	  if (!isPopState && history.state && history.state.viewer === 'pdf') {
-		history.back();
-	  }
-	}
-
-    function closePdfFullscreen() {
-      document.getElementById('pdfFullscreenViewer').style.display = 'none';
-    }
-
-    document.getElementById('btnClearPos').onclick = () => {
-      state.posFile = null;
-      if(state.posUrl) URL.revokeObjectURL(state.posUrl);
-      state.posUrl = null;
-      document.getElementById('posStatus').textContent = 'ПОС: Не загружен';
-      document.getElementById('posThumbContainer').classList.add('hidden');
-      document.getElementById('btnClearPos').classList.add('hidden');
-      document.getElementById('posViewer').style.display = 'none';
-      inputPos.value = "";
-      checkReady();
-    };
-
-    // --- Photos Logic ---
+    // 5. Обработка Фото
     const inputPhotos = document.getElementById('inputPhotos');
     inputPhotos.addEventListener('change', (e) => handlePhotos(e.target.files));
 
@@ -594,126 +437,154 @@
 
     function renderPhotos() {
       const grid = document.getElementById('photoGrid');
-      grid.innerHTML = ''; let size = 0;
+      grid.innerHTML = ''; 
+      let totalSize = 0;
       state.photos.forEach((p, i) => {
-        size += p.file.size;
+        totalSize += p.file.size;
         const div = document.createElement('div');
         div.className = 'thumb';
         div.innerHTML = `<img src="${p.url}" onclick="viewPhoto('${p.url}')"><button class="remove-btn" onclick="removePhoto(${i})">×</button>`;
         grid.appendChild(div);
       });
-      document.getElementById('photoStatus').textContent = `Фотографии: ${state.photos.length} / 20 (${formatBytes(size)})`;
+      document.getElementById('photoStatus').textContent = `Фотографии: ${state.photos.length} / 20 (${formatBytes(totalSize)})`;
       document.getElementById('btnClearAllPhotos').classList.toggle('hidden', !state.photos.length);
-    }
-
-    function viewPhoto(url) {
-      document.getElementById('photoLarge').src = url;
-      document.getElementById('photoViewer').style.display = 'block';
-      document.getElementById('photoViewer').scrollIntoView({behavior:'smooth'});
     }
 
     function removePhoto(i) {
       URL.revokeObjectURL(state.photos[i].url);
-      state.photos.splice(i, 1); renderPhotos(); checkReady();
+      state.photos.splice(i, 1); 
+      renderPhotos(); 
+      checkReady();
     }
 
-    // Очистка
+    // 6. Вспомогательные функции
+    function checkReady() {
+      document.getElementById('btnToStep2').disabled = !(state.posFile && state.photos.length > 0);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // 7. Просмотрщики (Viewers)
+    document.getElementById('posPreviewThumb').onclick = () => {
+      if (isMobile()) openPdfFullscreen();
+      else {
+        document.getElementById('posViewer').style.display = 'block';
+        document.getElementById('posViewer').scrollIntoView({behavior:'smooth'});
+      }
+    };
+
+    async function openPdfFullscreen() {
+      const container = document.getElementById('pdfCanvasContainer');
+      container.innerHTML = '<p style="color:white; padding: 20px;">Загрузка...</p>';
+      document.getElementById('pdfFullscreenViewer').style.display = 'flex';
+      try {
+        const loadingTask = pdfjsLib.getDocument(state.posUrl);
+        const pdf = await loadingTask.promise;
+        container.innerHTML = ''; 
+        for (let n = 1; n <= pdf.numPages; n++) {
+          const page = await pdf.getPage(n);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          canvas.height = viewport.height; canvas.width = viewport.width;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          container.appendChild(canvas);
+        }
+      } catch (e) { container.innerHTML = '<p style="color:red;">Ошибка PDF</p>'; }
+    }
+
+    function closePdfFullscreen() { document.getElementById('pdfFullscreenViewer').style.display = 'none'; }
+    function closeViewer(id) { document.getElementById(id).style.display = 'none'; }
+    function closeElement(id) { document.getElementById(id).style.display = 'none'; }
+    function viewPhoto(url) {
+      document.getElementById('photoLarge').src = url;
+      document.getElementById('photoViewer').style.display = 'block';
+    }
+
+    // 8. Очистка
     document.getElementById('btnClearPos').onclick = () => {
       state.posFile = null; URL.revokeObjectURL(state.posUrl); state.posUrl = null;
-      document.getElementById('posThumbContainer').classList.add('hidden');
       document.getElementById('posStatus').textContent = 'ПОС: Не загружен';
-      document.getElementById('posViewer').style.display = 'none';
+      document.getElementById('posThumbContainer').classList.add('hidden');
+      document.getElementById('btnClearPos').classList.add('hidden');
+      closeViewer('posViewer');
+      inputPos.value = '';
       checkReady();
     };
 
     document.getElementById('btnClearAllPhotos').onclick = () => {
       state.photos.forEach(p => URL.revokeObjectURL(p.url));
       state.photos = []; renderPhotos();
-      document.getElementById('photoViewer').style.display = 'none';
+      closeViewer('photoViewer');
+      inputPhotos.value = '';
       checkReady();
     };
 
-    function closeElement(id) { document.getElementById(id).style.display = 'none'; }
-    function checkReady() { document.getElementById('btnToStep2').disabled = !(state.posFile && state.photos.length); }
-    document.getElementById('btnToStep2').onclick = () => showPage(2);
+    // 9. Имитация статуса
+    function updateTaskStatusSimulation() {
+      const label = document.getElementById('taskStatusLabel');
+      const desc = document.getElementById('statusExplanation');
+      label.textContent = 'завершено';
+      label.className = 'status-badge status-done';
+      desc.innerHTML = `Анализ завершен.<br><br><button class="btn-primary" onclick="showPage(4)">Результаты</button>`;
+    }
 
-    // Drag and Drop
-    ['dropzonePos', 'dropzonePhotos'].forEach(id => {
-      const z = document.getElementById(id);
-      z.ondragover = (e) => { e.preventDefault(); z.style.borderColor = 'var(--primary)'; };
-      z.ondragleave = () => { z.style.borderColor = 'var(--border)'; };
-      z.ondrop = (e) => {
-        e.preventDefault(); z.style.borderColor = 'var(--border)';
-        const files = e.dataTransfer.files;
-        if (id.includes('Pos')) document.getElementById('inputPos').files = files, document.getElementById('inputPos').dispatchEvent(new Event('change'));
-        else document.getElementById('inputPhotos').files = files, document.getElementById('inputPhotos').dispatchEvent(new Event('change'));
-      };
-    });
-	  
-	// Функция загрузки данных XML
+    // 10. Загрузка XML (Страница 4)
     async function loadXmlData() {
       const tbody = document.getElementById('xmlTableBody');
       const downloadBtn = document.getElementById('downloadReportBtn');
-      
-      if (!state.currentNumber) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Ошибка: номер проекта не распознан. Загрузите файл ПОС.</td></tr>';
-          return;
-      }
-		
+      if (!state.currentNumber) return;
+
       const xmlPath = `files/table_${state.currentNumber}.xml`;
       const reportPath = `files/Отчет_${state.currentNumber}.pdf`;
 
-      // Настраиваем кнопку скачивания
       downloadBtn.href = reportPath;
       downloadBtn.innerHTML = `📥 Скачать Отчет_${state.currentNumber}.pdf`;
-
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Загрузка данных из ' + xmlPath + '...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Загрузка...</td></tr>';
 
       try {
         const response = await fetch(xmlPath);
-        
-        if (!response.ok) throw new Error('Файл не найден');
-
+        if (!response.ok) throw new Error();
         const xmlText = await response.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        const xmlDoc = (new DOMParser()).parseFromString(xmlText, "text/xml");
         const items = xmlDoc.getElementsByTagName("item");
-
         tbody.innerHTML = ''; 
-
         for (let i = 0; i < items.length; i++) {
-          // Безопасное извлечение данных из XML
-          const id = items[i].getElementsByTagName("id")[0]?.textContent || (i + 1);
-          const name = items[i].getElementsByTagName("name")[0]?.textContent || "—";
-          const project = items[i].getElementsByTagName("project")[0]?.textContent || "—";
-          const fact = items[i].getElementsByTagName("fact")[0]?.textContent || "—";
-          const statusText = items[i].getElementsByTagName("status")[0]?.textContent || "—";
-
-          // Определяем класс цвета для статуса
-          const statusClass = statusText.trim().toLowerCase() === 'соответствует' ? 'status-done' : 'status-error';
-
-          const row = `
+          const getVal = (tag) => items[i].getElementsByTagName(tag)[0]?.textContent || "—";
+          const status = getVal("status");
+          const statusClass = status.trim().toLowerCase() === 'соответствует' ? 'status-done' : 'status-error';
+          tbody.innerHTML += `
             <tr style="border-bottom: 1px solid var(--border);">
-              <td style="padding: 12px; font-weight: 600;">${id}</td>
-              <td style="padding: 12px;">${name}</td>
-              <td style="padding: 12px; color: var(--text-muted); font-size: 13px;">${project}</td>
-              <td style="padding: 12px; color: var(--text-muted); font-size: 13px;">${fact}</td>
-              <td style="padding: 12px;">
-                <span class="status-badge ${statusClass}">${statusText}</span>
-              </td>
+              <td style="padding: 12px;">${getVal("id")}</td>
+              <td style="padding: 12px;">${getVal("name")}</td>
+              <td style="padding: 12px; color: var(--text-muted); font-size: 13px;">${getVal("project")}</td>
+              <td style="padding: 12px; color: var(--text-muted); font-size: 13px;">${getVal("fact")}</td>
+              <td style="padding: 12px;"><span class="status-badge ${statusClass}">${status}</span></td>
             </tr>`;
-          tbody.innerHTML += row;
         }
       } catch (e) {
-        console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--danger); padding:20px;">
-          Ошибка: Данные <b>${xmlPath}</b> не найдены.<br>
-          Проверьте наличие файла в папке files.
-        </td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--danger); padding:20px;">Файл ${xmlPath} не найден.</td></tr>`;
       }
     }
+
+    // 11. Drag and Drop
+    document.querySelectorAll('.dropzone').forEach(zone => {
+      zone.ondragover = (e) => { e.preventDefault(); zone.style.borderColor = 'var(--primary)'; };
+      zone.ondragleave = () => { zone.style.borderColor = 'var(--border)'; };
+      zone.ondrop = (e) => {
+        e.preventDefault();
+        zone.style.borderColor = 'var(--border)';
+        const files = e.dataTransfer.files;
+        if (zone.innerHTML.includes('ПОС')) handlePos(files[0]);
+        else handlePhotos(files);
+      };
+    });
   </script>
 </body>
 </html>
+
 
 
