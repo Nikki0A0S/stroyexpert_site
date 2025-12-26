@@ -342,8 +342,18 @@
     function handlePos(file) {
       if (!file || file.type !== 'application/pdf') return;
       
-      const match = file.name.match(/^(.*?)_ПОС/i);
-      state.currentNumber = match ? match[1] : file.name.split('.')[0];
+      // Изменено регулярное выражение: ищем всё до "_ПОС"
+      // Если файл "40-17-4_ПОС.pdf", то match[1] будет "40-17-4"
+      const match = file.name.match(/^(.*?)_ПОС/i); 
+      
+      if (match && match[1]) {
+        state.currentNumber = match[1];
+      } else {
+        // Если формат не совпал, берем имя до первой точки (как запасной вариант)
+        state.currentNumber = file.name.split('.')[0];
+      }
+      
+      console.log("Определен номер проекта:", state.currentNumber);
       
       if (state.posUrl) URL.revokeObjectURL(state.posUrl);
       state.posFile = file;
@@ -511,4 +521,5 @@
   </script>
 </body>
 </html>
+
 
